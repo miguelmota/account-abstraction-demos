@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
     createPublicClient,
     createWalletClient,
@@ -24,6 +24,8 @@ import {
     Link,
     Alert,
     SelectChangeEvent,
+    Switch,
+    FormControlLabel,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
@@ -69,14 +71,34 @@ export function Demo() {
     const [statusClass, setStatusClass] = useState<string>('info')
     const [selectedNetwork, setSelectedNetwork] = useState<string>('0xaa36a7')
     const [connectedAddress, setConnectedAddress] = useState<string>('')
-    const [transactions, setTransactions] = useState<Transaction[]>([])
+    const [transactions, setTransactions] = useState<Transaction[]>(() => {
+        const saved = localStorage.getItem('bundledTransactions')
+        return saved ? JSON.parse(saved) : []
+    })
     const [txHash, setTxHash] = useState<string>('')
     const [isExecuting, setIsExecuting] = useState(false)
+    const [paymasterUrl, setPaymasterUrl] = useState<string>(() => {
+        return localStorage.getItem('paymasterUrl') || ''
+    })
+    const [isPaymasterOptional, setIsPaymasterOptional] = useState<boolean>(() => {
+        return localStorage.getItem('isPaymasterOptional') === 'true'
+    })
     const [clients, setClients] = useState<{
         walletClient: any;
         publicClient: any;
         pimlicoClient: any;
     } | null>(null)
+
+    // Save transactions to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('bundledTransactions', JSON.stringify(transactions))
+    }, [transactions])
+
+    // Save paymaster settings to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('paymasterUrl', paymasterUrl)
+        localStorage.setItem('isPaymasterOptional', isPaymasterOptional.toString())
+    }, [paymasterUrl, isPaymasterOptional])
 
     const initializeClients = useCallback(async () => {
         if (typeof window === 'undefined' || !window.ethereum) {
@@ -271,10 +293,12 @@ export function Demo() {
                     atomicRequired: true,
                     calls,
                     capabilities: {
-                        paymasterService: {
-                          url: `https://api.pimlico.io/v2/11155111/rpc?apikey=${PIMLICO_API_KEY}`,
-                          optional: true
-                        }
+                        ...(paymasterUrl && {
+                            paymasterService: {
+                                url: paymasterUrl,
+                                optional: isPaymasterOptional
+                            }
+                        })
                     }
                 }]
             }
@@ -428,6 +452,34 @@ export function Demo() {
                     >
                         Execute Bundled Transactions
                     </Button>
+                </Paper>
+
+                <Paper sx={{ p: 3, mt: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Paymaster Service
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Configure the paymaster service for gasless transactions. Leave the URL empty to skip using a paymaster.
+                    </Typography>
+                    
+                    <TextField
+                        fullWidth
+                        label="Paymaster URL"
+                        value={paymasterUrl}
+                        onChange={(e) => setPaymasterUrl(e.target.value)}
+                        margin="normal"
+                        placeholder="https://api.example.com/paymaster"
+                    />
+                    
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={isPaymasterOptional}
+                                onChange={(e) => setIsPaymasterOptional(e.target.checked)}
+                            />
+                        }
+                        label="Make paymaster optional"
+                    />
                 </Paper>
 
                 {txHash && (
